@@ -1,0 +1,130 @@
+/*using System;
+using System.Data;
+
+namespace D
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            DataTable studentsTable = new DataTable("Students");
+            studentsTable.Columns.Add("Id", typeof(int));
+            studentsTable.Columns.Add("Name", typeof(string));
+            studentsTable.Columns.Add("Age", typeof(int));
+            studentsTable.Columns.Add("GroupName", typeof(string));
+
+            studentsTable.Rows.Add(1, "Ярик Нарик", 16, "П411");
+            studentsTable.Rows.Add(2, "Онипко Данил", 17, "П411");
+            studentsTable.Rows.Add(3, "Петров Артур ", 16, "П411");
+            studentsTable.Rows.Add(4, "Вова Вист", 20, "П411");
+            studentsTable.Rows.Add(5, "Данил Колбасенко", 19, "П411");
+
+            Console.WriteLine("Таблица студентов");
+            Console.WriteLine("----------------------------------------------------------");
+
+            foreach (DataRow row in studentsTable.Rows)
+            {
+                Console.WriteLine($"Id: {row["Id"],-3} | Name: {row["Name"],-20} | Age: {row["Age"],-3} | Group: {row["GroupName"]}");
+            }
+
+            Console.WriteLine("----------------------------------------------------------");
+            DataRow oldestStudent = null;
+            int maxAge = -1;
+
+            foreach (DataRow row in studentsTable.Rows)
+            {
+                int currentAge = Convert.ToInt32(row["Age"]);
+
+                if (currentAge > maxAge)
+                {
+                    maxAge = currentAge;
+                    oldestStudent = row;
+                }
+            }
+
+            if (oldestStudent != null)
+            {
+                Console.WriteLine(
+                    $"\nСамый старший в группе: {oldestStudent["Name"]}, " +
+                    $"возраст: {oldestStudent["Age"]}, " +
+                    $"группа: {oldestStudent["GroupName"]}");
+            }
+            else
+            {
+                Console.WriteLine("\nТаблица пуста");
+            }
+
+            int searchId = 2;
+            DataRow studentToEdit = null;
+
+            foreach (DataRow row in studentsTable.Rows)
+            {
+                if (Convert.ToInt32(row["Id"]) == searchId)
+                {
+                    studentToEdit = row;
+                    break;
+                }
+            }
+
+            if (studentToEdit != null)
+            {
+                Console.WriteLine(
+                    $"Найден студент: {studentToEdit["Name"]}, " +
+                    $"возраст: {studentToEdit["Age"]}");
+
+                studentToEdit["Age"] = 25;
+
+                Console.WriteLine("Возраст студента изменён на 25 лет.");
+            }
+            else
+            {
+                Console.WriteLine($"Студент с Id {searchId} не найден.");
+            }
+
+            studentsTable.Rows.Add(
+                5,
+                "Иван Иванов",
+                17,
+                "П411"
+            );
+
+            Console.WriteLine("Добавлен новый студент: Иван Иванов.");
+            int deleteId = 4;
+            DataRow studentToDelete = null;
+
+            foreach (DataRow row in studentsTable.Rows)
+            {
+                if (Convert.ToInt32(row["Id"]) == deleteId)
+                {
+                    studentToDelete = row;
+                    break;
+                }
+            }
+
+            if (studentToDelete != null)
+            {
+                Console.WriteLine(
+                    $"Удалён студент: {studentToDelete["Name"]}");
+                
+                studentsTable.Rows.Remove(studentToDelete);
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"Студент с Id {deleteId} не найден.");
+            }
+
+            Console.WriteLine("\nОбновлённая таблица студентов");
+            Console.WriteLine("----------------------------------------------------------");
+
+            foreach (DataRow row in studentsTable.Rows)
+            {
+                Console.WriteLine($"Id: {row["Id"],-3} | Name: {row["Name"],-20} | Age: {row["Age"],-3} | Group: {row["GroupName"]}");
+            }
+
+            Console.WriteLine("----------------------------------------------------------");
+
+            Console.ReadKey();
+        }
+    }
+}*/
