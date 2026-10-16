@@ -1,0 +1,40 @@
+
+using System;
+using System.Data;
+using System.Data.Common;
+using Npgsql;
+
+string connectionString = "Host=wotacoma.ru;Port=5090;Username=fortnaut;Password=CROSS;Database=fortnaut";
+
+DbProviderFactory factory = NpgsqlFactory.Instance;
+DataTable table = new DataTable();
+using (DbConnection connection =
+       factory.CreateConnection()
+       ?? throw new InvalidOperationException())
+{
+    connection.ConnectionString = connectionString;
+    connection.Open();
+
+    using DbCommand command = connection.CreateCommand();
+
+    command.CommandText = """
+        SELECT *
+        FROM students_lesson7
+        """;
+
+    using DbDataAdapter adapter =
+        factory.CreateDataAdapter()
+        ?? throw new InvalidOperationException();
+
+    adapter.SelectCommand = command;
+    adapter.Fill(table);
+}
+
+foreach (DataRow row in table.Rows)
+{
+    Console.WriteLine(
+        $"ID: {row["id"]}, " +
+        $"name: {row["first_name"]}, " +
+        $"name: {row["last_name"]}, " +
+        $"age: {row["age"]}");
+}
