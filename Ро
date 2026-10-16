@@ -1,0 +1,119 @@
+using System;
+using System.Data;
+using System.Data.Common;
+using Npgsql;
+
+namespace AdoNetPostgresPractice
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string connectionString = "Host=localhost;Port=5432;Database=StudyDB;Username=postgres;Password=ваш_пароль";
+
+            DbProviderFactories.RegisterFactory("Npgsql", NpgsqlFactory.Instance);
+
+            DbProviderFactory factory = DbProviderFactories.GetFactory("Npgsql");
+
+            Console.WriteLine("--- ЗАДАЧА 1: Загрузка студентов ---\n");
+
+            DataTable table = new DataTable();
+
+            {
+                using DbConnection connection = factory.CreateConnection() 
+                    ?? throw new InvalidOperationException();
+
+                connection.ConnectionString = connectionString;
+
+                using DbCommand command = connection.CreateCommand();
+                command.CommandText = """
+                    SELECT id, name, age
+                    FROM students
+                    ORDER BY id;
+                    """;
+
+                using DbDataAdapter adapter = factory.CreateDataAdapter() 
+                    ?? throw new InvalidOperationException();
+
+                adapter.SelectCommand = command;
+
+                adapter.Fill(table);
+            }
+
+            Console.WriteLine($"Всего записей: {table.Rows.Count}");
+            foreach (DataRow row in table.Rows)
+            {
+                Console.WriteLine($"ID: {row["id"]} | Имя: {row["name"]} | Возраст: {row["age"]}");
+            }
+
+            Console.WriteLine("\n------------------------------------\n");
+
+            Console.WriteLine("--- ЗАДАЧА 2: Несколько таблиц ---\n");
+
+            DataTable studentsTable = new DataTable("Students");
+            DataTable groupsTable = new DataTable("Groups");
+
+            {
+                using DbConnection connection = factory.CreateConnection() 
+                    ?? throw new InvalidOperationException();
+                
+                connection.ConnectionString = connectionString;
+
+                using DbCommand cmdStudents = connection.CreateCommand();
+                cmdStudents.CommandText = """
+                    SELECT id, name, age, group_id
+                    FROM students;
+                    """;
+
+                using DbDataAdapter adapterStudents = factory.CreateDataAdapter() 
+                    ?? throw new InvalidOperationException();
+                adapterStudents.SelectCommand = cmdStudents;
+
+                adapterStudents.Fill(studentsTable);
+
+                using DbCommand cmdGroups = connection.CreateCommand();
+                cmdGroups.CommandText = """
+                    SELECT id, name
+                    FROM groups;
+                    """;
+
+                using DbDataAdapter adapterGroups = factory.CreateDataAdapter() 
+                    ?? throw new InvalidOperationException();
+                adapterGroups.SelectCommand = cmdGroups;
+                adapterGroups.Fill(groupsTable);
+            }
+
+            DataSet dataSet = new DataSet();
+            dataSet.Tables.Add(studentsTable);
+            dataSet.Tables.Add(groupsTable);
+
+            DataRelation relation = new DataRelation(
+                "StudentGroupRelation",
+                groupsTable.Columns["id"],
+                studentsTable.Columns["group_id"]
+            );
+            dataSet.Relations.Add(relation);
+
+            string selectedGroupName = "ПИ-21";
+            Console.WriteLine($"Студенты выбранной группы: {selectedGroupName}\n");
+
+            DataRow[] groupRows = groupsTable.Select($"name = '{selectedGroupName}'");
+
+            if (groupRows.Length > 0)
+            {
+                DataRow groupRow = groupRows[0];
+                
+                foreach (DataRow studentRow in groupRow.GetChildRows(relation))
+                {
+                    Console.WriteLine($" - {studentRow["name"]} (возраст: {studentRow["age"]})");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Группа не найдена.");
+            }
+
+            Console.ReadKey();
+        }
+    }
+}
