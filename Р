@@ -1,0 +1,55 @@
+using System;
+using System.Data;
+using System.Data.Common;
+
+class Program
+{
+    static void Main()
+    {
+        // Строка подключения (замените на свои данные)
+        string connectionString = "Host=localhost;Port=5432;Database=StudyDB;Username=postgres;Password=ваш_пароль";
+        string providerName = "Npgsql"; // Имя провайдера для PostgreSQL
+
+        try
+        {
+            // 1. Использовать DbProviderFactory
+            DbProviderFactory factory = DbProviderFactories.GetFactory(providerName);
+
+            // 2. Создать DbConnection, DbCommand, DbDataAdapter
+            using (DbConnection connection = factory.CreateConnection())
+            {
+                connection.ConnectionString = connectionString;
+                connection.Open();
+
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = "SELECT * FROM Students"; // Предполагаемый запрос
+
+                    using (DbDataAdapter adapter = factory.CreateDataAdapter())
+                    {
+                        adapter.SelectCommand = command;
+
+                        // 3. Заполнить DataTable с помощью Fill()
+                        DataTable studentsTable = new DataTable();
+                        adapter.Fill(studentsTable);
+
+                        // 4. Закрыть соединение (автоматически благодаря using, но можно вызвать connection.Close() явно)
+                        // После выхода из блока using соединение закроется.
+                        
+                        // 5. После закрытия выведите все строки.
+                        Console.WriteLine("Данные студентов:");
+                        foreach (DataRow row in studentsTable.Rows)
+                        {
+                            // Выводим все столбцы строки через запятую
+                            Console.WriteLine(string.Join(", ", row.ItemArray));
+                        }
+                    }
+                }
+            } // Здесь соединение закрывается
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка: {ex.Message}");
+        }
+    }
+}
