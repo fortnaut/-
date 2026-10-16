@@ -1,0 +1,52 @@
+using System;
+using System.Data;
+using System.Data.Common;
+using Npgsql;
+
+namespace AdoNetPostgresPractice
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string connectionString = "Host=localhost;Port=5432;Database=fortnaut;Username=fortnaut;Password=CROSS";
+
+            DbProviderFactories.RegisterFactory("Npgsql", NpgsqlFactory.Instance);
+
+            DbProviderFactory factory =
+                DbProviderFactories.GetFactory("Npgsql");
+
+            DataTable table = new DataTable();
+
+            {
+                using DbConnection connection =
+                    factory.CreateConnection()
+                    ?? throw new InvalidOperationException();
+
+                connection.ConnectionString = connectionString;
+
+                using DbCommand command = connection.CreateCommand();
+                command.CommandText = """
+                    SELECT id, name, age
+                    FROM students
+                    ORDER BY id;
+                    """;
+
+                using DbDataAdapter adapter =
+                    factory.CreateDataAdapter()
+                    ?? throw new InvalidOperationException();
+
+                adapter.SelectCommand = command;
+
+                adapter.Fill(table);
+            }
+
+            foreach (DataRow row in table.Rows)
+            {
+                Console.WriteLine($"ID: {row["id"]} | Имя: {row["name"]} | Возраст: {row["age"]}");
+            }
+
+            Console.ReadKey();
+        }
+    }
+}
