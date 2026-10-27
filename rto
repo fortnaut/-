@@ -1,0 +1,29 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ConsoleApp1.Models
+{
+    internal class Student
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public int Age { get; set; }
+    
+
+    static public void Main(string[] args)
+        {
+            var student = new Student
+            {
+                FirstName = "Анна",
+                LastName = "Петрова",
+                Age = 21
+            };
+
+            Console.WriteLine($"{student.FirstName} {student.LastName} {student.Age} ");
+        }
+    }
+}
