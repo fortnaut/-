@@ -1,0 +1,68 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+
+const int PORT = 5000;
+
+Console.WriteLine("=== TCP SERVER ===");
+
+Socket server = new Socket(
+    AddressFamily.InterNetwork,
+    SocketType.Stream,
+    ProtocolType.Tcp
+);
+
+try
+{
+    IPEndPoint endpoint = new IPEndPoint(IPAddress.Loopback, PORT);
+    server.Bind(endpoint);
+    server.Listen(10);
+
+    Console.WriteLine($"Server started on port {PORT}");
+    Console.WriteLine("Waiting for client...");
+
+    using Socket client = server.Accept();
+    Console.WriteLine("Client connected!");
+    Console.WriteLine($"Client address: {client.RemoteEndPoint}");
+
+    using MemoryStream receivedData = new MemoryStream();
+    byte[] buffer = new byte[1024];
+
+    int received;
+    while ((received = client.Receive(buffer)) > 0)
+    {
+        receivedData.Write(buffer, 0, received);
+    }
+
+    string message = Encoding.UTF8.GetString(receivedData.ToArray());
+    Console.WriteLine($"Received: {message}");
+
+    string response = $"Server received: {message}";
+    byte[] responseData = Encoding.UTF8.GetBytes(response);
+
+    int sent = 0;
+    while (sent < responseData.Length)
+    {
+        sent += client.Send(
+            responseData,
+            sent,
+            responseData.Length - sent,
+            SocketFlags.None
+        );
+    }
+
+    Console.WriteLine("Response sent.");
+}
+catch (SocketException ex)
+{
+    Console.WriteLine($"Socket error: {ex.Message}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error: {ex.Message}");
+}
+finally
+{
+    server.Close();
+    Console.WriteLine("Server stopped.");
+}
