@@ -1,0 +1,47 @@
+Создание структуры проекта
+
+Создадим решение с двумя консольными проектами.
+Никакие сторонние библиотеки устанавливать не требуется.
+
+Откройте терминал:
+```
+mkdir SocketMessenger
+cd SocketMessenger
+
+dotnet new sln -n SocketMessenger
+
+dotnet new console -n SocketServer
+dotnet new console -n SocketClient
+
+dotnet sln add SocketServer/SocketServer.csproj
+dotnet sln add SocketClient/SocketClient.csproj
+```
+
+Итоговая структура:
+```
+SocketMessenger/
+│
+├── SocketMessenger.sln
+│
+├── SocketServer/
+│   ├── SocketServer.csproj
+│   └── Program.cs
+│
+└── SocketClient/
+    ├── SocketClient.csproj
+    └── Program.cs
+```
+
+
+## П1
+
+Начнём с серверной части.
+
+Сервер должен:
+1. Создать TCP-сокет.
+2. Привязать его к порту `5000`.
+3. Начать ожидать подключения.
+4. Принять подключение клиента.
+5. Получить сообщение.
+6. Отправить ответ.
+7. Завершить соединение.
