@@ -1,0 +1,76 @@
+using System.Buffers.Binary;
+using System.Net.Sockets;
+using System.Text.Json;
+
+namespace StudentNetworkService.Shared;
+
+public static class Protocol
+{
+    public const int MaxMessageSize = 1024 * 1024;
+
+    // единые опции на обеих сторонах: camelCase в JSON, регистронезависимый разбор
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
+
+    public static void SendMessage<T>(Socket socket, T message)
+    {
+        byte[] data = JsonSerializer.SerializeToUtf8Bytes(message, JsonOptions);
+
+        if (data.Length > MaxMessageSize)
+            throw new IOException("Message is too large.");
+
+        byte[] header = new byte[4];
+        // big-endian: единый сетевой порядок байтов независимо от платформы
+        BinaryPrimitives.WriteInt32BigEndian(header, data.Length);
+
+        SendAll(socket, header);
+        SendAll(socket, data);
+    }
+
+    public static T? ReceiveMessage<T>(Socket socket)
+    {
+        byte[] header = new byte[4];
+
+        int firstByte = socket.Receive(header, 0, 4, SocketFlags.None);
+        if (firstByte == 0)
+            return default;
+
+        ReceiveRemaining(socket, header, firstByte);
+
+        int length = BinaryPrimitives.ReadInt32BigEndian(header);
+
+        if (length < 0 || length > MaxMessageSize)
+            throw new IOException("Invalid message length.");
+
+        byte[] data = new byte[length];
+        ReceiveRemaining(socket, data, 0);
+
+        return JsonSerializer.Deserialize<T>(data, JsonOptions);
+    }
+
+    private static void SendAll(Socket socket, byte[] data)
+    {
+        int sent = 0;
+        while (sent < data.Length)
+        {
+            int count = socket.Send(data, sent, data.Length - sent, SocketFlags.None);
+            if (count == 0)
+                throw new IOException("Connection closed.");
+            sent += count;
+        }
+    }
+
+    private static void ReceiveRemaining(Socket socket, byte[] buffer, int received)
+    {
+        while (received < buffer.Length)
+        {
+            int count = socket.Receive(buffer, received, buffer.Length - received, SocketFlags.None);
+            if (count == 0)
+                throw new IOException("Connection closed.");
+            received += count;
+        }
+    }
+}
