@@ -1,10 +1,123 @@
+Проект: Student Network Service
+
+Разработаем небольшую клиент-серверную систему управления студентами.
+Внутреннее хранилище пока будет представлено обычным списком в памяти.
+
+Функциональность:
+- подключение к серверу;
+- получение списка студентов;
+- получение информации о студенте;
+- добавление студента;
+- удаление студента;
+- завершение соединения.
+
+
+## Создание проекта
+
+Создадим решение:
+```
+mkdir StudentNetworkService
+cd StudentNetworkService
+
+dotnet new sln -n StudentNetworkService
+
+dotnet new console -n StudentServer
+dotnet new console -n StudentClient
+
+dotnet sln add StudentServer/StudentServer.csproj
+dotnet sln add StudentClient/StudentClient.csproj
+```
+
+Структура:
+```
+StudentNetworkService/
+│
+├── StudentNetworkService.sln
+│
+├── StudentServer/
+│   └── Program.cs
+│
+└── StudentClient/
+    └── Program.cs
+```
+
+## Создание модели и протокола
+
+В обоих проектах создадим файл `Models.cs`.
+Модель протокола в обоих проектах должна быть одинаковой. В дальнейшем её можно будет вынести в отдельную библиотеку классов.
+Он будет содержать модель студента и классы запросов и ответов.
+
+```cs
+// объект, который хранится на сервере
+public class Student
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+// структура входящего запроса
+public class ClientRequest
+{
+    public string Command { get; set; } = "";
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+// структура ответа сервера
+public class ServerResponse
+{
+    public string Status { get; set; } = "";
+    public string Message { get; set; } = "";
+    public List<Student> Data { get; set; } = new();
+}
+```
+
+Например, клиент может отправить:
+```json
+{
+  "command": "add_student",
+  "name": "Алексей"
+}
+```
+
+А сервер вернуть:
+```json
+{
+  "status": "success",
+  "message": "Студент добавлен",
+  "data": []
+}
+```
+
+
+## Реализация серверной части
+
+Его обязанности:
+1. Ожидать подключения.
+2. Принимать клиента.
+3. Получать запросы.
+4. Выполнять команды.
+5. Отправлять ответы.
+6. Продолжать работу до отключения клиента.
+
+Сервер будет обрабатывает клиентов последовательно. Пока один клиент подключён и работает, остальные ждут в очереди `Listen`.
+Также в данном учебном варианте обработка повреждённого JSON или неожиданного отключения завершает обслуживание текущего клиента, но не останавливает сам сервер.
+#### StudentServer/Program.cs
+```cs
+
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 
 const int PORT = 5000;
 
-Console.WriteLine("=== TCP SERVER ===");
+List<Student> students =
+[
+    new Student { Id = 1, Name = "Иван" },
+    new Student { Id = 2, Name = "Мария" },
+    new Student { Id = 3, Name = "Алексей" }
+];
 
 Socket server = new Socket(
     AddressFamily.InterNetwork,
@@ -12,57 +125,483 @@ Socket server = new Socket(
     ProtocolType.Tcp
 );
 
-try
+server.Bind(new IPEndPoint(IPAddress.Loopback, PORT));
+server.Listen(10);
+
+Console.WriteLine($"Server started: {PORT}");
+
+// Цикл `while` позволяет обрабатывать несколько запросов одного клиента
+while (true)
 {
-    IPEndPoint endpoint = new IPEndPoint(IPAddress.Loopback, PORT);
-    server.Bind(endpoint);
-    server.Listen(10);
-
-    Console.WriteLine($"Server started on port {PORT}");
-    Console.WriteLine("Waiting for client...");
-
-    using Socket client = server.Accept();
-    Console.WriteLine("Client connected!");
-    Console.WriteLine($"Client address: {client.RemoteEndPoint}");
-
-    using MemoryStream receivedData = new MemoryStream();
-    byte[] buffer = new byte[1024];
-
-    int received;
-    while ((received = client.Receive(buffer)) > 0)
+	// принимает подключение
+    Socket client = server.Accept();
+    Console.WriteLine($"Connected: {client.RemoteEndPoint}");
+    using (client)
     {
-        receivedData.Write(buffer, 0, received);
+        try
+        {
+            while (true)
+            {
+                ClientRequest? request = ReceiveMessage<ClientRequest>(client);
+
+                if (request == null)
+                {
+                    break;
+                }
+                Console.WriteLine($"Command: {request.Command}");
+                ServerResponse response = ProcessRequest(request);
+                SendMessage(client, response);
+                if (request.Command == "exit")
+                {
+                    break;
+                }
+            }
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"Client disconnected: {ex.Message}");
+        }
+        catch (SocketException ex)
+        {
+            Console.WriteLine($"Socket error: {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"Invalid JSON: {ex.Message}");
+        }
     }
 
-    string message = Encoding.UTF8.GetString(receivedData.ToArray());
-    Console.WriteLine($"Received: {message}");
+    Console.WriteLine("Client disconnected.");
+}
 
-    string response = $"Server received: {message}";
-    byte[] responseData = Encoding.UTF8.GetBytes(response);
-
-    int sent = 0;
-    while (sent < responseData.Length)
+// ProcessRequest должен быть обычной локальной функцией, без `static`, поскольку он обращается к списку `students`,
+// объявленному в верхней части программы. Остальные вспомогательные методы можно оставить `static`
+// выполняет команду
+ServerResponse ProcessRequest(ClientRequest request)
+{
+    switch (request.Command.ToLowerInvariant())
     {
-        sent += client.Send(
-            responseData,
+        case "get_students":
+            return new ServerResponse
+            {
+                Status = "success",
+                Message = "Student list",
+                Data = students.ToList()
+            };
+
+        case "get_student":
+            Student? student = students
+                .FirstOrDefault(s => s.Id == request.Id);
+
+            if (student == null)
+            {
+                return new ServerResponse
+                {
+                    Status = "error",
+                    Message = "Student not found"
+                };
+            }
+
+            return new ServerResponse
+            {
+                Status = "success",
+                Message = student.Name,
+                Data = [student]
+            };
+
+        case "add_student":
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return new ServerResponse
+                {
+                    Status = "error",
+                    Message = "Name cannot be empty"
+                };
+            }
+
+            int newId = students.Count == 0
+                ? 1
+                : students.Max(s => s.Id) + 1;
+
+            Student newStudent = new Student
+            {
+                Id = newId,
+                Name = request.Name
+            };
+
+            students.Add(newStudent);
+
+            return new ServerResponse
+            {
+                Status = "success",
+                Message = $"Student added: {newId}"
+            };
+
+        case "delete_student":
+            Student? toDelete = students
+                .FirstOrDefault(s => s.Id == request.Id);
+
+            if (toDelete == null)
+            {
+                return new ServerResponse
+                {
+                    Status = "error",
+                    Message = "Student not found"
+                };
+            }
+
+            students.Remove(toDelete);
+
+            return new ServerResponse
+            {
+                Status = "success",
+                Message = "Student deleted"
+            };
+
+        case "exit":
+            return new ServerResponse
+            {
+                Status = "success",
+                Message = "Goodbye!"
+            };
+
+        default:
+            return new ServerResponse
+            {
+                Status = "error",
+                Message = "Unknown command"
+            };
+    }
+}
+
+// сериализует ответ и отправляет его
+static void SendMessage<T>(Socket socket, T message)
+{
+    byte[] data = JsonSerializer.SerializeToUtf8Bytes(message);
+
+    if (data.Length > 1024 * 1024)
+    {
+        throw new IOException("Message is too large.");
+    }
+
+    byte[] header = BitConverter.GetBytes(data.Length);
+
+    SendAll(socket, header);
+    SendAll(socket, data);
+}
+
+// получает сообщение и преобразует JSON в объект
+static T? ReceiveMessage<T>(Socket socket)
+{
+    byte[] header = new byte[4];
+
+    int firstByte = socket.Receive(
+        header,
+        0,
+        4,
+        SocketFlags.None
+    );
+
+    if (firstByte == 0)
+    {
+        return default;
+    }
+
+    ReceiveRemaining(socket, header, firstByte);
+
+	// Длина сообщения записывается в формате little-endian через BitConverter. 
+	// Для взаимодействия с приложениями на других платформах лучше явно зафиксировать 
+	// сетевой порядок байтов (big-endian), например через BinaryPrimitives
+    int length = BitConverter.ToInt32(header, 0);
+
+    if (length < 0 || length > 1024 * 1024)
+    {
+        throw new IOException("Invalid message length.");
+    }
+
+    byte[] data = new byte[length];
+
+    ReceiveRemaining(socket, data, 0);
+
+    return JsonSerializer.Deserialize<T>(data);
+}
+
+static void SendAll(Socket socket, byte[] data)
+{
+    int sent = 0;
+
+    while (sent < data.Length)
+    {
+        int count = socket.Send(
+            data,
             sent,
-            responseData.Length - sent,
+            data.Length - sent,
             SocketFlags.None
         );
-    }
 
-    Console.WriteLine("Response sent.");
+        if (count == 0)
+		{
+			throw new IOException("Connection closed.");
+		}
+        sent += count;
+    }
+}
+
+static void ReceiveRemaining(
+    Socket socket,
+    byte[] buffer,
+    int received)
+{
+    while (received < buffer.Length)
+    {
+        int count = socket.Receive(
+            buffer,
+            received,
+            buffer.Length - received,
+            SocketFlags.None
+        );
+
+        if (count == 0)
+        {
+            throw new IOException("Connection closed.");
+        }
+
+        received += count;
+    }
+}
+```
+
+
+## Реализация клиентской части
+
+Клиент будет предоставлять пользователю меню команд:
+```
+================================
+       STUDENT CLIENT
+================================
+
+1. Получить список студентов
+2. Найти студента по ID
+3. Добавить студента
+4. Удалить студента
+5. Отключиться
+
+Выберите действие:
+```
+
+#### StudentClient/Program.cs
+```cs
+
+using System.Net;
+using System.Net.Sockets;
+using System.Text.Json;
+
+const int PORT = 5000;
+
+using Socket client = new Socket(
+    AddressFamily.InterNetwork,
+    SocketType.Stream,
+    ProtocolType.Tcp
+);
+
+try
+{
+    client.Connect(
+        new IPEndPoint(IPAddress.Loopback, PORT)
+    );
+
+    Console.WriteLine("Connected to server!");
+
+    while (true)
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== STUDENT CLIENT ===");
+        Console.WriteLine("1. Get students");
+        Console.WriteLine("2. Find student");
+        Console.WriteLine("3. Add student");
+        Console.WriteLine("4. Delete student");
+        Console.WriteLine("0. Exit");
+        Console.Write("Choose: ");
+
+        string? choice = Console.ReadLine();
+
+        ClientRequest request = new();
+
+        switch (choice)
+        {
+            case "1":
+                request.Command = "get_students";
+                break;
+
+            case "2":
+                request.Command = "get_student";
+
+                Console.Write("Student ID: ");
+
+                if (!int.TryParse(Console.ReadLine(), out int searchId))
+                {
+                    Console.WriteLine("Invalid ID.");
+                    continue;
+                }
+
+                request.Id = searchId;
+                break;
+
+            case "3":
+                request.Command = "add_student";
+
+                Console.Write("Student name: ");
+                request.Name = Console.ReadLine() ?? "";
+                break;
+
+            case "4":
+                request.Command = "delete_student";
+
+                Console.Write("Student ID: ");
+
+                if (!int.TryParse(Console.ReadLine(), out int deleteId))
+                {
+                    Console.WriteLine("Invalid ID.");
+                    continue;
+                }
+
+                request.Id = deleteId;
+                break;
+
+            case "0":
+                request.Command = "exit";
+                break;
+
+            default:
+                Console.WriteLine("Unknown command.");
+                continue;
+        }
+
+        SendMessage(client, request);
+
+        ServerResponse? response =
+            ReceiveMessage<ServerResponse>(client);
+
+        if (response == null)
+        {
+            Console.WriteLine("Server disconnected.");
+            break;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Status: {response.Status}");
+        Console.WriteLine($"Message: {response.Message}");
+
+        foreach (Student student in response.Data)
+        {
+            Console.WriteLine(
+                $"ID: {student.Id}, Name: {student.Name}"
+            );
+        }
+
+        if (request.Command == "exit")
+            break;
+    }
 }
 catch (SocketException ex)
 {
-    Console.WriteLine($"Socket error: {ex.Message}");
+    Console.WriteLine($"Connection error: {ex.Message}");
 }
-catch (Exception ex)
+catch (IOException ex)
 {
-    Console.WriteLine($"Error: {ex.Message}");
+    Console.WriteLine($"Communication error: {ex.Message}");
+}
+catch (JsonException ex)
+{
+    Console.WriteLine($"Invalid server response: {ex.Message}");
 }
 finally
 {
-    server.Close();
-    Console.WriteLine("Server stopped.");
+    if (client.Connected)
+        client.Shutdown(SocketShutdown.Both);
+
+    Console.WriteLine("Client stopped.");
 }
+
+static void SendMessage<T>(Socket socket, T message)
+{
+    byte[] data = JsonSerializer.SerializeToUtf8Bytes(message);
+
+    if (data.Length > 1024 * 1024)
+        throw new IOException("Message is too large.");
+
+    byte[] header = BitConverter.GetBytes(data.Length);
+
+    SendAll(socket, header);
+    SendAll(socket, data);
+}
+
+static T? ReceiveMessage<T>(Socket socket)
+{
+    byte[] header = new byte[4];
+
+    int firstByte = socket.Receive(
+        header,
+        0,
+        4,
+        SocketFlags.None
+    );
+
+    if (firstByte == 0)
+        return default;
+
+    ReceiveRemaining(socket, header, firstByte);
+
+    int length = BitConverter.ToInt32(header, 0);
+
+    if (length < 0 || length > 1024 * 1024)
+        throw new IOException("Invalid message length.");
+
+    byte[] data = new byte[length];
+
+    ReceiveRemaining(socket, data, 0);
+
+    return JsonSerializer.Deserialize<T>(data);
+}
+
+static void SendAll(Socket socket, byte[] data)
+{
+    int sent = 0;
+
+    while (sent < data.Length)
+    {
+        int count = socket.Send(
+            data,
+            sent,
+            data.Length - sent,
+            SocketFlags.None
+        );
+
+        if (count == 0)
+            throw new IOException("Connection closed.");
+
+        sent += count;
+    }
+}
+
+static void ReceiveRemaining(
+    Socket socket,
+    byte[] buffer,
+    int received)
+{
+    while (received < buffer.Length)
+    {
+        int count = socket.Receive(
+            buffer,
+            received,
+            buffer.Length - received,
+            SocketFlags.None
+        );
+
+        if (count == 0)
+            throw new IOException("Connection closed.");
+
+        received += count;
+    }
+}
+```
